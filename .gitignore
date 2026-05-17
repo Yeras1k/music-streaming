@@ -4,8 +4,10 @@ node_modules/
 .venv/
 venv/
 __pycache__/
-.mypy_cache/
+*.egg-info/
+.Python/
 .pytest_cache/
+.mypy_cache/
 target/
 .gradle/
 
@@ -15,31 +17,34 @@ build/
 *.pyc
 *.class
 *.o
-*.exe
-*.dll
-*.so
-*.a
 *.obj
+*.so
+*.dll
+*.exe
 *.out
 
-# Editor/IDE files
-.vscode/
-.idea/
+# Logs and temporary files
+*.log
+*.tmp
 *.swp
 *.swo
-*.tmp
 
-# System files
-.DS_Store
-Thumbs.db
+# Environment variables
 .env
 .env.local
 *.env.*
 
-# Logs
-*.log
+# Editors and IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
 
-# Coverage
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Coverage reports
 coverage/
 htmlcov/
 .coverage
@@ -63,8 +68,4 @@ htmlcov/
 *.Z
 *.lz
 *.lzo
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.tar.zst
 ```

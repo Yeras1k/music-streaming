@@ -7,10 +7,7 @@ WORKDIR /app
 # Copy everything including proto directory
 COPY . .
 
-# Remove the replace directive temporarily
-RUN sed -i '/replace github.com\/music-streaming\/proto/d' go.mod
-
-# Download dependencies
+# Download dependencies (the replace directive will use local ../proto)
 RUN go mod download
 
 # Build the application
