@@ -1,9 +1,4 @@
 ```
-# Go-specific ignores
-*.mod
-*.sum
-vendor/
-
 # Dependencies
 node_modules/
 .venv/
@@ -17,32 +12,32 @@ target/
 # Build artifacts
 dist/
 build/
+*.pyc
+*.class
+*.o
 *.exe
 *.dll
 *.so
 *.a
-*.o
 *.obj
 *.out
 
-# Logs and temp files
-*.log
-*.tmp
-*.swp
-*.swo
-
-# Environment
-.env
-.env.local
-.env.*
-
-# Editors
+# Editor/IDE files
 .vscode/
 .idea/
+*.swp
+*.swo
+*.tmp
 
 # System files
 .DS_Store
 Thumbs.db
+.env
+.env.local
+*.env.*
+
+# Logs
+*.log
 
 # Coverage
 coverage/
@@ -68,4 +63,8 @@ htmlcov/
 *.Z
 *.lz
 *.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
 ```
