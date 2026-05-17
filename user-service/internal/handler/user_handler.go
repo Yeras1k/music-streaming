@@ -7,7 +7,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	pb "./proto/user"
+	pb "github.com/music-streaming/proto/user"
 	"github.com/music-streaming/user-service/internal/domain"
 	"github.com/music-streaming/user-service/internal/service"
 )

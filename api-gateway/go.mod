@@ -1,6 +1,6 @@
 module github.com/music-streaming/api-gateway
 
-go 1.21
+go 1.19
 
 require (
     github.com/gin-contrib/cors v1.5.0

@@ -1,6 +1,6 @@
 module github.com/music-streaming/proto
 
-go 1.21
+go 1.19
 
 require (
 	google.golang.org/grpc v1.59.0

@@ -1,6 +1,6 @@
 module github.com/music-streaming/music-service
 
-go 1.21
+go 1.19
 
 require (
     github.com/go-redis/redis/v8 v8.11.5
