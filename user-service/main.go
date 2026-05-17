@@ -21,7 +21,7 @@ import (
     "gorm.io/driver/postgres"
     "gorm.io/gorm"
 
-    pb "./proto/user"
+    pb "github.com/music-streaming/proto/user"
 )
 
 type User struct {

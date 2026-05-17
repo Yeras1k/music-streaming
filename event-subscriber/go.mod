@@ -1,6 +1,6 @@
 module github.com/music-streaming/event-subscriber
 
-go 1.21
+go 1.19
 
 require (
 	github.com/google/uuid v1.6.0
