@@ -1,0 +1,67 @@
+{
+  "dashboard": {
+    "title": "Music Streaming Platform",
+    "panels": [
+      {
+        "title": "API Requests per Second",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[1m])",
+            "legendFormat": "{{method}} {{endpoint}}"
+          }
+        ]
+      },
+      {
+        "title": "gRPC Latency (ms)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(grpc_server_handling_seconds_bucket[5m])) by (le, method))",
+            "legendFormat": "{{method}}"
+          }
+        ]
+      },
+      {
+        "title": "Database Connections",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "pg_stat_database_numbackends",
+            "legendFormat": "database"
+          }
+        ]
+      },
+      {
+        "title": "Redis Cache Hit Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "redis_keyspace_hits_total / (redis_keyspace_hits_total + redis_keyspace_misses_total) * 100",
+            "legendFormat": "hit rate %"
+          }
+        ]
+      },
+      {
+        "title": "NATS Message Throughput",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(nats_msgs_in_total[1m])",
+            "legendFormat": "messages/sec"
+          }
+        ]
+      },
+      {
+        "title": "Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{code=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+            "legendFormat": "error %"
+          }
+        ]
+      }
+    ]
+  }
+}
