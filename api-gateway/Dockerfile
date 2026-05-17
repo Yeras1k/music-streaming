@@ -2,9 +2,16 @@ FROM golang:1.23-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates
 
-WORKDIR /app
+WORKDIR /app/api-gateway
 
-COPY . .
+# Copy go.mod and go.sum first for better caching
+COPY api-gateway/go.mod api-gateway/go.sum ./
+
+# Copy proto directory
+COPY proto ../proto
+
+# Copy the rest of the api-gateway code
+COPY api-gateway/ .
 
 # Download dependencies (the replace directive will use local ../proto)
 RUN go mod download
@@ -17,7 +24,7 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
 
-COPY --from=builder /app/api-gateway .
+COPY --from=builder /app/api-gateway/api-gateway .
 
 EXPOSE 8080
 

@@ -50,8 +50,8 @@ services:
 
   user-service:
     build:
-      context: ./user-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: user-service/Dockerfile
     ports:
       - "50051:50051"
     environment:
@@ -76,7 +76,9 @@ services:
     restart: unless-stopped
 
   music-service:
-    build: ./music-service
+    build:
+      context: .
+      dockerfile: music-service/Dockerfile
     ports:
       - "50052:50052"
     environment:
@@ -103,7 +105,9 @@ services:
     restart: unless-stopped
 
   payment-service:
-    build: ./payment-service
+    build:
+      context: .
+      dockerfile: payment-service/Dockerfile
     ports:
       - "50053:50053"
     environment:
@@ -128,7 +132,9 @@ services:
     restart: unless-stopped
 
   event-subscriber:
-    build: ./event-subscriber
+    build:
+      context: .
+      dockerfile: event-subscriber/Dockerfile
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -146,7 +152,9 @@ services:
     restart: unless-stopped
 
   api-gateway:
-    build: ./api-gateway
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
     ports:
       - "8080:8080"
     environment:
