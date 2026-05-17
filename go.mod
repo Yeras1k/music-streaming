@@ -1,6 +1,6 @@
 module github.com/music-streaming
 
-go 1.19.0
+go 1.25.0
 
 require (
 	google.golang.org/grpc v1.81.1
