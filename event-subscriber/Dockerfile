@@ -2,9 +2,16 @@ FROM golang:1.23-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates
 
-WORKDIR /app
+WORKDIR /app/event-subscriber
 
-COPY . .
+# Copy go.mod and go.sum first for better caching
+COPY event-subscriber/go.mod event-subscriber/go.sum ./
+
+# Copy proto directory
+COPY proto ../proto
+
+# Copy the rest of the event-subscriber code
+COPY event-subscriber/ .
 
 RUN go mod download
 
@@ -16,6 +23,6 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
 
-COPY --from=builder /app/event-subscriber .
+COPY --from=builder /app/event-subscriber/event-subscriber .
 
 CMD ["./event-subscriber"]
