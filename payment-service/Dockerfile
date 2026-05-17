@@ -6,8 +6,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN sed -i '/replace github.com\/music-streaming\/proto/d' go.mod 2>/dev/null || true
-
+# Download dependencies (the replace directive will use local ../proto)
 RUN go mod download
 
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o payment-service ./cmd/main.go

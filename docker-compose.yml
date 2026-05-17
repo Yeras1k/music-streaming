@@ -64,8 +64,6 @@ services:
       NATS_URL: nats://nats:4222
       GRPC_PORT: 50051
       JWT_SECRET: ${JWT_SECRET:-test-secret}
-    volumes:
-      - ./proto:/go/pkg/mod/github.com/music-streaming/proto
     depends_on:
       postgres:
         condition: service_healthy
