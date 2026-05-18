@@ -7,9 +7,6 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
-
-	"github.com/music-streaming/payment-service/internal/domain"
-	"github.com/music-streaming/payment-service/pkg/events"
 )
 
 type PaymentService struct {

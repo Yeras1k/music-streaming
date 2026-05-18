@@ -8,7 +8,7 @@ WORKDIR /app/user-service
 COPY user-service/go.mod user-service/go.sum ./
 
 # Copy proto directory
-COPY proto ../proto
+COPY proto /app/proto
 
 # Copy the rest of the user-service code
 COPY user-service/ .

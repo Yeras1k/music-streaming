@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -121,5 +122,3 @@ func (h *PaymentHandler) GetPricingPlans(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, resp)
 }
-
-func strconv() {} // Placeholder for strconv import

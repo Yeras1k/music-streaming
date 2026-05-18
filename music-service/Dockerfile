@@ -8,7 +8,7 @@ WORKDIR /app/music-service
 COPY music-service/go.mod music-service/go.sum ./
 
 # Copy proto directory
-COPY proto ../proto
+COPY proto /app/proto
 
 # Copy the rest of the music-service code
 COPY music-service/ .

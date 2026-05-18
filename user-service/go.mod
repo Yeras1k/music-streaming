@@ -6,7 +6,7 @@ require (
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang-jwt/jwt/v5 v5.2.0
 	github.com/google/uuid v1.6.0
-	github.com/music-streaming/proto v0.0.0-00010101000000-000000000000
+	github.com/music-streaming/proto v0.0.0
 	github.com/nats-io/nats.go v1.31.0
 	github.com/stretchr/testify v1.8.1
 	golang.org/x/crypto v0.18.0

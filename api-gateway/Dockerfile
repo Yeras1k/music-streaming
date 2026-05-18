@@ -8,7 +8,7 @@ WORKDIR /app/api-gateway
 COPY api-gateway/go.mod api-gateway/go.sum ./
 
 # Copy proto directory
-COPY proto ../proto
+COPY proto /app/proto
 
 # Copy the rest of the api-gateway code
 COPY api-gateway/ .

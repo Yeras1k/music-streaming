@@ -8,7 +8,7 @@ WORKDIR /app/payment-service
 COPY payment-service/go.mod payment-service/go.sum ./
 
 # Copy proto directory
-COPY proto ../proto
+COPY proto /app/proto
 
 # Copy the rest of the payment-service code
 COPY payment-service/ .

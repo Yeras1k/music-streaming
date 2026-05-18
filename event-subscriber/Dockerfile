@@ -8,7 +8,7 @@ WORKDIR /app/event-subscriber
 COPY event-subscriber/go.mod event-subscriber/go.sum ./
 
 # Copy proto directory
-COPY proto ../proto
+COPY proto /app/proto
 
 # Copy the rest of the event-subscriber code
 COPY event-subscriber/ .
