@@ -23,8 +23,8 @@ type Track struct {
 	Duration  int32     `json:"duration"`
 	Genre     string    `json:"genre"`
 	URL       string    `json:"url"`
-	Plays     int32     `json:"plays"`
-	Likes     int32     `json:"likes"`
+	Plays     int64     `json:"plays"`
+	Likes     int64     `json:"likes"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -35,7 +35,6 @@ type Playlist struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	IsPublic    bool      `json:"is_public"`
-	Tracks      []Track   `json:"tracks,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -54,6 +53,8 @@ type TrackRepository interface {
 	List(ctx context.Context, page, pageSize int32) ([]Track, int64, error)
 	Search(ctx context.Context, query string, page, pageSize int32) ([]Track, int64, error)
 	IncrementPlays(ctx context.Context, id string) error
+	IncrementLikes(ctx context.Context, id string) error
+	DecrementLikes(ctx context.Context, id string) error
 	GetByUserID(ctx context.Context, userID string) ([]Track, error)
 }
 
@@ -71,7 +72,6 @@ type PlaylistRepository interface {
 type LikeRepository interface {
 	Create(ctx context.Context, userID, trackID string) error
 	Delete(ctx context.Context, userID, trackID string) error
-	GetUserLikes(ctx context.Context, userID string, page, pageSize int32) ([]Track, int64, error)
 	IsLiked(ctx context.Context, userID, trackID string) (bool, error)
-	CountByTrack(ctx context.Context, trackID string) (int32, error)
+	GetUserLikes(ctx context.Context, userID string, page, pageSize int32) ([]Track, int64, error)
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/music-streaming/user-service/internal/domain"
 )
 
-type User struct {
+type UserModel struct {
 	ID        string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	Email     string    `gorm:"uniqueIndex;not null"`
 	Password  string    `gorm:"not null"`
@@ -21,13 +21,30 @@ type User struct {
 	UpdatedAt time.Time `gorm:"autoUpdateTime"`
 }
 
-type Session struct {
-	ID           string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	UserID       string    `gorm:"type:uuid;not null;index"`
-	Token        string    `gorm:"uniqueIndex;not null"`
-	RefreshToken string    `gorm:"uniqueIndex"`
-	ExpiresAt    time.Time `gorm:"not null"`
-	CreatedAt    time.Time `gorm:"autoCreateTime"`
+func (m *UserModel) ToDomain() *domain.User {
+	return &domain.User{
+		ID:        m.ID,
+		Email:     m.Email,
+		Password:  m.Password,
+		Username:  m.Username,
+		Role:      m.Role,
+		Verified:  m.Verified,
+		CreatedAt: m.CreatedAt,
+		UpdatedAt: m.UpdatedAt,
+	}
+}
+
+func UserFromDomain(u *domain.User) *UserModel {
+	return &UserModel{
+		ID:        u.ID,
+		Email:     u.Email,
+		Password:  u.Password,
+		Username:  u.Username,
+		Role:      u.Role,
+		Verified:  u.Verified,
+		CreatedAt: u.CreatedAt,
+		UpdatedAt: u.UpdatedAt,
+	}
 }
 
 type userRepository struct {
@@ -39,74 +56,57 @@ func NewUserRepository(db *gorm.DB) domain.UserRepository {
 }
 
 func (r *userRepository) Create(ctx context.Context, user *domain.User) error {
-	u := &User{
-		ID:       user.ID,
-		Email:    user.Email,
-		Password: user.Password,
-		Username: user.Username,
-		Role:     user.Role,
-		Verified: user.Verified,
-	}
-	return r.db.WithContext(ctx).Create(u).Error
+	model := UserFromDomain(user)
+	return r.db.WithContext(ctx).Create(model).Error
 }
 
 func (r *userRepository) GetByID(ctx context.Context, id string) (*domain.User, error) {
-	var user User
-	err := r.db.WithContext(ctx).First(&user, "id = ?", id).Error
+	var model UserModel
+	err := r.db.WithContext(ctx).First(&model, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, domain.ErrUserNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	return &domain.User{
-		ID:        user.ID,
-		Email:     user.Email,
-		Username:  user.Username,
-		Role:      user.Role,
-		Verified:  user.Verified,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-	}, nil
+	return model.ToDomain(), nil
 }
 
 func (r *userRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
-	var user User
-	err := r.db.WithContext(ctx).First(&user, "email = ?", email).Error
+	var model UserModel
+	err := r.db.WithContext(ctx).First(&model, "email = ?", email).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, domain.ErrUserNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	return &domain.User{
-		ID:        user.ID,
-		Email:     user.Email,
-		Password:  user.Password,
-		Username:  user.Username,
-		Role:      user.Role,
-		Verified:  user.Verified,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-	}, nil
+	return model.ToDomain(), nil
 }
 
 func (r *userRepository) Update(ctx context.Context, user *domain.User) error {
-	return r.db.WithContext(ctx).Model(&User{}).Where("id = ?", user.ID).Updates(map[string]interface{}{
-		"username":   user.Username,
-		"email":      user.Email,
-		"updated_at": time.Now(),
-	}).Error
+	model := UserFromDomain(user)
+	return r.db.WithContext(ctx).Model(&UserModel{}).
+		Where("id = ?", model.ID).
+		Updates(map[string]interface{}{
+			"username":   model.Username,
+			"email":      model.Email,
+			"updated_at": time.Now(),
+		}).Error
 }
 
 func (r *userRepository) Delete(ctx context.Context, id string) error {
-	return r.db.WithContext(ctx).Delete(&User{}, "id = ?", id).Error
+	return r.db.WithContext(ctx).Delete(&UserModel{}, "id = ?", id).Error
 }
 
 func (r *userRepository) UpdatePassword(ctx context.Context, id, hashedPassword string) error {
-	return r.db.WithContext(ctx).Model(&User{}).Where("id = ?", id).Update("password", hashedPassword).Error
+	return r.db.WithContext(ctx).Model(&UserModel{}).
+		Where("id = ?", id).
+		Update("password", hashedPassword).Error
 }
 
 func (r *userRepository) VerifyEmail(ctx context.Context, userID string) error {
-	return r.db.WithContext(ctx).Model(&User{}).Where("id = ?", userID).Update("verified", true).Error
+	return r.db.WithContext(ctx).Model(&UserModel{}).
+		Where("id = ?", userID).
+		Update("verified", true).Error
 }
