@@ -288,7 +288,7 @@ func (s *paymentServiceServer) UpdatePaymentMethod(ctx context.Context, req *pb.
 	}, nil
 }
 
-func (s *paymentServiceServer) GetPaymentMethod(ctx context.Context, req *pb.GetPaymentMethodRequest) (*pb.PaymentMethod, nil) {
+func (s *paymentServiceServer) GetPaymentMethod(ctx context.Context, req *pb.GetPaymentMethodRequest) (*pb.PaymentMethod, error) {
 	return &pb.PaymentMethod{
 		Id:       "pm_default",
 		Last4:    "4242",
