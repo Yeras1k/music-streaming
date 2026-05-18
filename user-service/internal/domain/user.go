@@ -17,23 +17,23 @@ var (
 )
 
 type User struct {
-	ID        string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	Email     string    `gorm:"uniqueIndex;not null"`
-	Password  string    `gorm:"not null"`
-	Username  string    `gorm:"not null"`
-	Role      string    `gorm:"default:user"`
-	Verified  bool      `gorm:"default:false"`
-	CreatedAt time.Time `gorm:"autoCreateTime"`
-	UpdatedAt time.Time `gorm:"autoUpdateTime"`
+	ID        string    `json:"id"`
+	Email     string    `json:"email"`
+	Password  string    `json:"-"`
+	Username  string    `json:"username"`
+	Role      string    `json:"role"`
+	Verified  bool      `json:"verified"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type Session struct {
-	ID           string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	UserID       string    `gorm:"type:uuid;not null;index"`
-	Token        string    `gorm:"uniqueIndex;not null"`
-	RefreshToken string    `gorm:"uniqueIndex"`
-	ExpiresAt    time.Time `gorm:"not null"`
-	CreatedAt    time.Time `gorm:"autoCreateTime"`
+	ID           string    `json:"id"`
+	UserID       string    `json:"user_id"`
+	Token        string    `json:"token"`
+	RefreshToken string    `json:"refresh_token"`
+	ExpiresAt    time.Time `json:"expires_at"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 type UserRepository interface {

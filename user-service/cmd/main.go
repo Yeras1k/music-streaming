@@ -1,320 +1,189 @@
 package main
 
 import (
-    "context"
-    "fmt"
-    "log"
-    "net"
-    "os"
-    "os/signal"
-    "syscall"
-    "time"
+	"context"
+	"fmt"
+	"log"
+	"net"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
-    "github.com/go-redis/redis/v8"
-    "github.com/golang-jwt/jwt/v5"
-    "github.com/google/uuid"
-    "github.com/nats-io/nats.go"
-    "golang.org/x/crypto/bcrypt"
-    "google.golang.org/grpc"
-    "google.golang.org/grpc/codes"
-    "google.golang.org/grpc/health"
-    "google.golang.org/grpc/health/grpc_health_v1"
-    "google.golang.org/grpc/status"
-    "gorm.io/driver/postgres"
-    "gorm.io/gorm"
-    "gorm.io/gorm/logger"
+	"github.com/go-redis/redis/v8"
+	"github.com/nats-io/nats.go"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 
-    pb "github.com/music-streaming/proto/user"
+	pb "github.com/music-streaming/proto/user"
+	"github.com/music-streaming/user-service/internal/handler"
+	"github.com/music-streaming/user-service/internal/repository"
+	"github.com/music-streaming/user-service/internal/service"
+	"github.com/music-streaming/user-service/pkg/cache"
+	"github.com/music-streaming/user-service/pkg/email"
+	"github.com/music-streaming/user-service/pkg/events"
 )
 
-type User struct {
-    ID        string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-    Email     string    `gorm:"uniqueIndex;not null"`
-    Password  string    `gorm:"not null"`
-    Username  string    `gorm:"not null"`
-    Role      string    `gorm:"default:user"`
-    Verified  bool      `gorm:"default:false"`
-    CreatedAt time.Time `gorm:"autoCreateTime"`
-    UpdatedAt time.Time `gorm:"autoUpdateTime"`
-}
-
-type Session struct {
-    ID           string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-    UserID       string    `gorm:"type:uuid;not null;index"`
-    Token        string    `gorm:"uniqueIndex;not null"`
-    RefreshToken string    `gorm:"uniqueIndex"`
-    ExpiresAt    time.Time `gorm:"not null"`
-    CreatedAt    time.Time `gorm:"autoCreateTime"`
-}
-
-type userServiceServer struct {
-    pb.UnimplementedUserServiceServer
-    db        *gorm.DB
-    redis     *redis.Client
-    nc        *nats.Conn
-    jwtSecret []byte
-}
-
-func NewUserServiceServer(db *gorm.DB, redis *redis.Client, nc *nats.Conn, jwtSecret string) *userServiceServer {
-    return &userServiceServer{
-        db:        db,
-        redis:     redis,
-        nc:        nc,
-        jwtSecret: []byte(jwtSecret),
-    }
-}
-
-func (s *userServiceServer) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
-    var existingUser User
-    if err := s.db.Where("email = ?", req.Email).First(&existingUser).Error; err == nil {
-        return nil, status.Error(codes.AlreadyExists, "user already exists")
-    }
-
-    hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-    if err != nil {
-        return nil, status.Error(codes.Internal, "failed to hash password")
-    }
-
-    user := &User{
-        Email:    req.Email,
-        Password: string(hashedPassword),
-        Username: req.Username,
-        Role:     "user",
-        Verified: false,
-    }
-
-    if err := s.db.Create(user).Error; err != nil {
-        return nil, status.Error(codes.Internal, "failed to create user")
-    }
-
-    // Publish event
-    event := fmt.Sprintf(`{"event":"user_registered","user_id":"%s","email":"%s"}`, user.ID, user.Email)
-    s.nc.Publish("user.events", []byte(event))
-
-    return &pb.RegisterResponse{
-        UserId:  user.ID,
-        Message: "User registered successfully. Please verify your email.",
-    }, nil
-}
-
-func (s *userServiceServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginResponse, error) {
-    var user User
-    if err := s.db.Where("email = ?", req.Email).First(&user).Error; err != nil {
-        return nil, status.Error(codes.Unauthenticated, "invalid credentials")
-    }
-
-    if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
-        return nil, status.Error(codes.Unauthenticated, "invalid credentials")
-    }
-
-    token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-        "user_id": user.ID,
-        "exp":     time.Now().Add(24 * time.Hour).Unix(),
-    })
-
-    tokenString, err := token.SignedString(s.jwtSecret)
-    if err != nil {
-        return nil, status.Error(codes.Internal, "failed to generate token")
-    }
-
-    refreshToken := uuid.New().String()
-
-    session := &Session{
-        UserID:       user.ID,
-        Token:        tokenString,
-        RefreshToken: refreshToken,
-        ExpiresAt:    time.Now().Add(24 * time.Hour),
-    }
-    s.db.Create(session)
-
-    return &pb.LoginResponse{
-        Token:        tokenString,
-        UserId:       user.ID,
-        RefreshToken: refreshToken,
-    }, nil
-}
-
-func (s *userServiceServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.User, error) {
-    var user User
-    if err := s.db.First(&user, "id = ?", req.UserId).Error; err != nil {
-        return nil, status.Error(codes.NotFound, "user not found")
-    }
-
-    return &pb.User{
-        Id:        user.ID,
-        Email:     user.Email,
-        Username:  user.Username,
-        Role:      user.Role,
-        Verified:  user.Verified,
-        CreatedAt: user.CreatedAt.Unix(),
-    }, nil
-}
-
-func (s *userServiceServer) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*pb.User, error) {
-    var user User
-    if err := s.db.First(&user, "id = ?", req.UserId).Error; err != nil {
-        return nil, status.Error(codes.NotFound, "user not found")
-    }
-
-    if req.Username != "" {
-        user.Username = req.Username
-    }
-    if req.Email != "" {
-        user.Email = req.Email
-    }
-
-    s.db.Save(&user)
-
-    return &pb.User{
-        Id:        user.ID,
-        Email:     user.Email,
-        Username:  user.Username,
-        Role:      user.Role,
-        Verified:  user.Verified,
-        CreatedAt: user.CreatedAt.Unix(),
-    }, nil
-}
-
-func (s *userServiceServer) DeleteUser(ctx context.Context, req *pb.DeleteUserRequest) (*pb.DeleteUserResponse, error) {
-    s.db.Delete(&User{}, "id = ?", req.UserId)
-    s.db.Delete(&Session{}, "user_id = ?", req.UserId)
-    return &pb.DeleteUserResponse{Message: "User deleted successfully"}, nil
-}
-
-func (s *userServiceServer) ValidateToken(ctx context.Context, req *pb.ValidateTokenRequest) (*pb.ValidateTokenResponse, error) {
-    var session Session
-    if err := s.db.Where("token = ? AND expires_at > ?", req.Token, time.Now()).First(&session).Error; err != nil {
-        return &pb.ValidateTokenResponse{Valid: false}, nil
-    }
-
-    parsedToken, err := jwt.Parse(req.Token, func(token *jwt.Token) (interface{}, error) {
-        return s.jwtSecret, nil
-    })
-
-    if err != nil || !parsedToken.Valid {
-        return &pb.ValidateTokenResponse{Valid: false}, nil
-    }
-
-    return &pb.ValidateTokenResponse{
-        UserId: session.UserID,
-        Valid:  true,
-    }, nil
-}
-
-func (s *userServiceServer) Logout(ctx context.Context, req *pb.LogoutRequest) (*pb.LogoutResponse, error) {
-    s.db.Delete(&Session{}, "token = ?", req.Token)
-    return &pb.LogoutResponse{Message: "Logged out successfully"}, nil
-}
-
-func (s *userServiceServer) ChangePassword(ctx context.Context, req *pb.ChangePasswordRequest) (*pb.ChangePasswordResponse, error) {
-    var user User
-    if err := s.db.First(&user, "id = ?", req.UserId).Error; err != nil {
-        return nil, status.Error(codes.NotFound, "user not found")
-    }
-
-    if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.OldPassword)); err != nil {
-        return nil, status.Error(codes.Unauthenticated, "invalid old password")
-    }
-
-    hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
-    if err != nil {
-        return nil, status.Error(codes.Internal, "failed to hash password")
-    }
-
-    s.db.Model(&user).Update("password", string(hashedPassword))
-    s.db.Delete(&Session{}, "user_id = ?", req.UserId)
-
-    return &pb.ChangePasswordResponse{Message: "Password changed successfully"}, nil
-}
-
-func (s *userServiceServer) VerifyEmail(ctx context.Context, req *pb.VerifyEmailRequest) (*pb.VerifyEmailResponse, error) {
-    s.db.Model(&User{}).Where("id = ?", req.UserId).Update("verified", true)
-    return &pb.VerifyEmailResponse{Success: true, Message: "Email verified successfully"}, nil
-}
-
-func (s *userServiceServer) ForgotPassword(ctx context.Context, req *pb.ForgotPasswordRequest) (*pb.ForgotPasswordResponse, error) {
-    return &pb.ForgotPasswordResponse{Message: "If the email exists, a reset link will be sent"}, nil
-}
-
-func (s *userServiceServer) ResetPassword(ctx context.Context, req *pb.ResetPasswordRequest) (*pb.ResetPasswordResponse, error) {
-    return &pb.ResetPasswordResponse{Message: "Password reset successfully"}, nil
-}
-
-func (s *userServiceServer) GetUserStats(ctx context.Context, req *pb.GetUserStatsRequest) (*pb.UserStats, error) {
-    return &pb.UserStats{
-        TotalPlaylists:       0,
-        TotalTracksUploaded:  0,
-        TotalPlays:           0,
-        SubscriptionDaysLeft: 0,
-    }, nil
+type Config struct {
+	DBHost     string
+	DBPort     string
+	DBUser     string
+	DBPassword string
+	DBName     string
+	RedisAddr  string
+	NATSURL    string
+	GRPCPort   string
+	JWTSecret  string
+	SMTPHost   string
+	SMTPPort   string
+	SMTPUser   string
+	SMTPPass   string
 }
 
 func main() {
-    dbHost := getEnv("DB_HOST", "postgres")
-    dbPort := getEnv("DB_PORT", "5432")
-    dbUser := getEnv("DB_USER", "music_user")
-    dbPass := getEnv("DB_PASSWORD", "music_password")
-    dbName := getEnv("DB_NAME", "music_db")
-    redisAddr := getEnv("REDIS_ADDR", "redis:6379")
-    natsURL := getEnv("NATS_URL", "nats://nats:4222")
-    jwtSecret := getEnv("JWT_SECRET", "default-secret-key-change-in-production")
+	config := loadConfig()
 
-    dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=UTC",
-        dbHost, dbUser, dbPass, dbName, dbPort)
+	// Initialize database
+	db := initDatabase(config)
 
-    db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-        Logger: logger.Default.LogMode(logger.Info),
-    })
-    if err != nil {
-        log.Fatalf("Failed to connect to database: %v", err)
-    }
+	// Auto migrate
+	if err := db.AutoMigrate(&repository.UserModel{}, &repository.SessionModel{}); err != nil {
+		log.Fatalf("Failed to migrate database: %v", err)
+	}
 
-    db.AutoMigrate(&User{}, &Session{})
+	// Initialize Redis
+	redisClient := initRedis(config)
 
-    redisClient := redis.NewClient(&redis.Options{
-        Addr: redisAddr,
-    })
-    if err := redisClient.Ping(context.Background()).Err(); err != nil {
-        log.Fatalf("Failed to connect to Redis: %v", err)
-    }
+	// Initialize NATS
+	nc := initNATS(config)
+	defer nc.Close()
 
-    nc, err := nats.Connect(natsURL)
-    if err != nil {
-        log.Fatalf("Failed to connect to NATS: %v", err)
-    }
-    defer nc.Close()
+	// Initialize repositories
+	userRepo := repository.NewUserRepository(db)
+	sessionRepo := repository.NewSessionRepository(db)
 
-    grpcServer := grpc.NewServer()
-    pb.RegisterUserServiceServer(grpcServer, NewUserServiceServer(db, redisClient, nc, jwtSecret))
+	// Initialize cache
+	userCache := cache.NewUserCache(redisClient)
 
-    healthServer := health.NewServer()
-    grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
-    healthServer.SetServingStatus("user-service", grpc_health_v1.HealthCheckResponse_SERVING)
+	// Initialize email sender
+	emailSender := email.NewEmailSender(config.SMTPHost, config.SMTPPort, config.SMTPUser, config.SMTPPass)
 
-    lis, err := net.Listen("tcp", ":50051")
-    if err != nil {
-        log.Fatalf("Failed to listen: %v", err)
-    }
+	// Initialize event publisher
+	eventPublisher := events.NewEventPublisher(nc)
 
-    log.Println("User service running on port 50051")
+	// Initialize service
+	userService := service.NewUserService(
+		userRepo,
+		sessionRepo,
+		userCache,
+		emailSender,
+		eventPublisher,
+		config.JWTSecret,
+	)
 
-    go func() {
-        if err := grpcServer.Serve(lis); err != nil {
-            log.Fatalf("Failed to serve: %v", err)
-        }
-    }()
+	// Initialize gRPC handler
+	userHandler := handler.NewUserHandler(userService)
 
-    quit := make(chan os.Signal, 1)
-    signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-    <-quit
+	// Create gRPC server with interceptors
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(loggingInterceptor),
+		grpc.MaxConcurrentStreams(1000),
+	)
 
-    log.Println("Shutting down user service...")
-    grpcServer.GracefulStop()
+	// Register services
+	pb.RegisterUserServiceServer(grpcServer, userHandler)
+
+	// Register health check
+	healthServer := health.NewServer()
+	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
+	healthServer.SetServingStatus("user-service", grpc_health_v1.HealthCheckResponse_SERVING)
+
+	// Start listening
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", config.GRPCPort))
+	if err != nil {
+		log.Fatalf("Failed to listen: %v", err)
+	}
+
+	// Graceful shutdown
+	go func() {
+		log.Printf("User service starting on port %s", config.GRPCPort)
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Fatalf("Failed to serve: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Shutting down user service...")
+	grpcServer.GracefulStop()
+	log.Println("User service stopped")
+}
+
+func loadConfig() *Config {
+	return &Config{
+		DBHost:     getEnv("DB_HOST", "postgres"),
+		DBPort:     getEnv("DB_PORT", "5432"),
+		DBUser:     getEnv("DB_USER", "music_user"),
+		DBPassword: getEnv("DB_PASSWORD", "music_password"),
+		DBName:     getEnv("DB_NAME", "music_db"),
+		RedisAddr:  getEnv("REDIS_ADDR", "redis:6379"),
+		NATSURL:    getEnv("NATS_URL", "nats://nats:4222"),
+		GRPCPort:   getEnv("GRPC_PORT", "50051"),
+		JWTSecret:  getEnv("JWT_SECRET", "default-secret-change-in-production"),
+		SMTPHost:   getEnv("SMTP_HOST", "smtp.gmail.com"),
+		SMTPPort:   getEnv("SMTP_PORT", "587"),
+		SMTPUser:   getEnv("SMTP_USER", ""),
+		SMTPPass:   getEnv("SMTP_PASS", ""),
+	}
 }
 
 func getEnv(key, defaultValue string) string {
-    if value := os.Getenv(key); value != "" {
-        return value
-    }
-    return defaultValue
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+func initDatabase(config *Config) *gorm.DB {
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=UTC",
+		config.DBHost, config.DBUser, config.DBPassword, config.DBName, config.DBPort)
+
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Info),
+	})
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	return db
+}
+
+func initRedis(config *Config) *redis.Client {
+	client := redis.NewClient(&redis.Options{
+		Addr: config.RedisAddr,
+	})
+	if err := client.Ping(context.Background()).Err(); err != nil {
+		log.Fatalf("Failed to connect to Redis: %v", err)
+	}
+	return client
+}
+
+func initNATS(config *Config) *nats.Conn {
+	nc, err := nats.Connect(config.NATSURL)
+	if err != nil {
+		log.Fatalf("Failed to connect to NATS: %v", err)
+	}
+	return nc
+}
+
+func loggingInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	start := time.Now()
+	resp, err := handler(ctx, req)
+	log.Printf("Method: %s, Duration: %v, Error: %v", info.FullMethod, time.Since(start), err)
+	return resp, err
 }

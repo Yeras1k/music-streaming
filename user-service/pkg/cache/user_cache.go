@@ -13,19 +13,18 @@ import (
 
 type UserCache struct {
 	client *redis.Client
-	ttl    time.Duration
 }
 
-func NewUserCache(client *redis.Client, ttl time.Duration) *UserCache {
-	return &UserCache{client: client, ttl: ttl}
+func NewUserCache(client *redis.Client) *UserCache {
+	return &UserCache{client: client}
 }
 
-func (c *UserCache) SetUser(ctx context.Context, userID string, user *domain.User, ttl time.Duration) error {
+func (c *UserCache) SetUser(ctx context.Context, user *domain.User) error {
 	data, err := json.Marshal(user)
 	if err != nil {
 		return err
 	}
-	return c.client.Set(ctx, fmt.Sprintf("user:%s", userID), data, ttl).Err()
+	return c.client.Set(ctx, fmt.Sprintf("user:%s", user.ID), data, 30*time.Minute).Err()
 }
 
 func (c *UserCache) GetUser(ctx context.Context, userID string) (*domain.User, error) {
@@ -44,8 +43,8 @@ func (c *UserCache) InvalidateUser(ctx context.Context, userID string) error {
 	return c.client.Del(ctx, fmt.Sprintf("user:%s", userID)).Err()
 }
 
-func (c *UserCache) SetVerificationToken(ctx context.Context, userID, token string, ttl time.Duration) error {
-	return c.client.Set(ctx, fmt.Sprintf("verify:%s", userID), token, ttl).Err()
+func (c *UserCache) SetVerificationToken(ctx context.Context, userID, token string) error {
+	return c.client.Set(ctx, fmt.Sprintf("verify:%s", userID), token, 24*time.Hour).Err()
 }
 
 func (c *UserCache) GetVerificationToken(ctx context.Context, userID string) (string, error) {
@@ -56,12 +55,11 @@ func (c *UserCache) DeleteVerificationToken(ctx context.Context, userID string) 
 	return c.client.Del(ctx, fmt.Sprintf("verify:%s", userID)).Err()
 }
 
-func (c *UserCache) SetResetToken(ctx context.Context, userID, token string, ttl time.Duration) error {
-	return c.client.Set(ctx, fmt.Sprintf("reset:%s", userID), token, ttl).Err()
+func (c *UserCache) SetResetToken(ctx context.Context, userID, token string) error {
+	return c.client.Set(ctx, fmt.Sprintf("reset:%s", userID), token, 1*time.Hour).Err()
 }
 
 func (c *UserCache) GetResetTokenUser(ctx context.Context, token string) (string, error) {
-	// This is simplified - in production, you'd store token->userID mapping
 	keys, err := c.client.Keys(ctx, "reset:*").Result()
 	if err != nil {
 		return "", err
@@ -69,7 +67,7 @@ func (c *UserCache) GetResetTokenUser(ctx context.Context, token string) (string
 	for _, key := range keys {
 		val, err := c.client.Get(ctx, key).Result()
 		if err == nil && val == token {
-			return key[6:], nil // Remove "reset:" prefix
+			return key[6:], nil
 		}
 	}
 	return "", redis.Nil
@@ -83,10 +81,25 @@ func (c *UserCache) DeleteResetToken(ctx context.Context, token string) error {
 	return c.client.Del(ctx, fmt.Sprintf("reset:%s", userID)).Err()
 }
 
-func (c *UserCache) SetTokenUser(ctx context.Context, token, userID string, ttl time.Duration) error {
-	return c.client.Set(ctx, fmt.Sprintf("token:%s", token), userID, ttl).Err()
+func (c *UserCache) SetSession(ctx context.Context, token, userID string) error {
+	data := fmt.Sprintf(`{"user_id":"%s"}`, userID)
+	return c.client.Set(ctx, fmt.Sprintf("session:%s", token), data, 24*time.Hour).Err()
 }
 
-func (c *UserCache) GetTokenUser(ctx context.Context, token string) (string, error) {
-	return c.client.Get(ctx, fmt.Sprintf("token:%s", token)).Result()
+func (c *UserCache) GetSession(ctx context.Context, token string) (string, error) {
+	data, err := c.client.Get(ctx, fmt.Sprintf("session:%s", token)).Result()
+	if err != nil {
+		return "", err
+	}
+	var result struct {
+		UserID string `json:"user_id"`
+	}
+	if err := json.Unmarshal([]byte(data), &result); err != nil {
+		return "", err
+	}
+	return result.UserID, nil
+}
+
+func (c *UserCache) DeleteSession(ctx context.Context, token string) error {
+	return c.client.Del(ctx, fmt.Sprintf("session:%s", token)).Err()
 }
