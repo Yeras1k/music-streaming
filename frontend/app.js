@@ -325,6 +325,93 @@ function displayPlaylists(playlists) {
     `).join('');
 }
 
+async function viewPlaylist(playlistId) {
+
+    try {
+
+        const response = await fetch(`${API_URL}/api/playlists/${playlistId}`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (!response.ok) {
+            showNotification('Failed to load playlist', 'error');
+            return;
+        }
+
+        const playlist = await response.json();
+
+        const tracks = playlist.tracks || [];
+
+        document.querySelectorAll('.page').forEach(p => {
+            p.classList.remove('active');
+        });
+
+        document.getElementById('libraryPage').classList.add('active');
+
+        currentPage = 'playlist';
+
+        const grid = document.getElementById('tracksGrid');
+
+        if (!tracks.length) {
+
+            grid.innerHTML = `
+                <div class="playlist-view">
+                    <h2>${escapeHtml(playlist.name)}</h2>
+                    <p>${escapeHtml(playlist.description || '')}</p>
+                    <p class="empty-state">Playlist is empty</p>
+                </div>
+            `;
+
+            return;
+        }
+
+        grid.innerHTML = `
+            <div class="playlist-view">
+                <h2>${escapeHtml(playlist.name)}</h2>
+
+                <p>${escapeHtml(playlist.description || '')}</p>
+
+                <div class="playlist-tracks">
+
+                    ${tracks.map(track => `
+                        <div class="track-card">
+
+                            <div class="track-cover">🎵</div>
+
+                            <div class="track-info">
+                                <h4>${escapeHtml(track.title)}</h4>
+                                <p>${escapeHtml(track.artist)}</p>
+                            </div>
+
+                            <div class="track-actions">
+                                <button
+                                    onclick="playTrack(
+                                        '${track.id}',
+                                        '${escapeHtml(track.title)} - ${escapeHtml(track.artist)}'
+                                    )"
+                                    class="btn-small"
+                                >
+                                    ▶ Play
+                                </button>
+                            </div>
+
+                        </div>
+                    `).join('')}
+
+                </div>
+            </div>
+        `;
+
+    } catch (error) {
+
+        console.error('View playlist error:', error);
+
+        showNotification('Failed to open playlist', 'error');
+    }
+}
+
 async function createPlaylist() {
     const name = document.getElementById('playlistName').value;
     const description = document.getElementById('playlistDesc').value;
@@ -445,16 +532,47 @@ async function likeTrack(trackId) {
 
 // Audio Player
 function playTrack(trackId, trackName) {
+
     if (audioElement) {
         audioElement.pause();
     }
 
-    currentTrack = { id: trackId, name: trackName };
+    currentTrack = {
+        id: trackId,
+        name: trackName
+    };
+
     document.getElementById('currentTrack').textContent = trackName;
+
     document.getElementById('audioPlayer').style.display = 'block';
 
-    // Simulate streaming - in production, would use actual streaming endpoint
-    showNotification(`Now playing: ${trackName}`, 'info');
+    audioElement = document.getElementById('mainAudio');
+
+    if (!audioElement) {
+
+        audioElement = document.createElement('audio');
+
+        audioElement.id = 'mainAudio';
+
+        audioElement.controls = true;
+
+        audioElement.style.width = '100%';
+
+        document.getElementById('audioPlayer').appendChild(audioElement);
+    }
+
+    audioElement.src = `${API_URL}/stream/${trackId}`;
+
+    audioElement.load();
+
+    audioElement.play()
+        .then(() => {
+            showNotification(`Now playing: ${trackName}`, 'success');
+        })
+        .catch(error => {
+            console.error('Playback error:', error);
+            showNotification('Playback failed', 'error');
+        });
 }
 
 function togglePlay() {

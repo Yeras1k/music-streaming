@@ -248,13 +248,20 @@ func (s *musicServiceServer) GetUserPlaylists(ctx context.Context, req *pb.GetUs
 	for i, p := range playlists {
 		var count int64
 		s.db.Model(&PlaylistTrack{}).Where("playlist_id = ?", p.ID).Count(&count)
+
 		pbPlaylists[i] = &pb.Playlist{
-			Id:         p.ID,
-			Name:       p.Name,
-			TrackCount: int32(count),
+			Id:          p.ID,
+			UserId:      p.UserID,
+			Name:        p.Name,
+			Description: p.Description,
+			IsPublic:    p.IsPublic,
+			TrackCount:  int32(count),
 		}
 	}
-	return &pb.GetUserPlaylistsResponse{Playlists: pbPlaylists}, nil
+
+	return &pb.GetUserPlaylistsResponse{
+		Playlists: pbPlaylists,
+	}, nil
 }
 
 func (s *musicServiceServer) StreamTrack(req *pb.StreamTrackRequest, stream pb.MusicService_StreamTrackServer) error {
