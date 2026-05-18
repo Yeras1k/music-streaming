@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -248,13 +250,20 @@ func (s *musicServiceServer) GetUserPlaylists(ctx context.Context, req *pb.GetUs
 	for i, p := range playlists {
 		var count int64
 		s.db.Model(&PlaylistTrack{}).Where("playlist_id = ?", p.ID).Count(&count)
+
 		pbPlaylists[i] = &pb.Playlist{
-			Id:         p.ID,
-			Name:       p.Name,
-			TrackCount: int32(count),
+			Id:          p.ID,
+			UserId:      p.UserID,
+			Name:        p.Name,
+			Description: p.Description,
+			IsPublic:    p.IsPublic,
+			TrackCount:  int32(count),
 		}
 	}
-	return &pb.GetUserPlaylistsResponse{Playlists: pbPlaylists}, nil
+
+	return &pb.GetUserPlaylistsResponse{
+		Playlists: pbPlaylists,
+	}, nil
 }
 
 func (s *musicServiceServer) StreamTrack(req *pb.StreamTrackRequest, stream pb.MusicService_StreamTrackServer) error {
@@ -346,6 +355,14 @@ func main() {
 	redisAddr := getEnv("REDIS_ADDR", "redis:6379")
 	natsURL := getEnv("NATS_URL", "nats://nats:4222")
 	uploadPath := getEnv("UPLOAD_PATH", "/uploads")
+
+	go func() {
+		http.Handle("/metrics", promhttp.Handler())
+		log.Println("Metrics server listening on :9090")
+		if err := http.ListenAndServe(":9090", nil); err != nil {
+			log.Printf("Metrics server error: %v", err)
+		}
+	}()
 
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=UTC",
 		dbHost, dbUser, dbPass, dbName, dbPort)

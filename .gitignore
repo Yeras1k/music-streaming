@@ -1,4 +1,3 @@
-```
 # Dependencies
 node_modules/
 venv/
@@ -71,4 +70,3 @@ Thumbs.db
 *.tar.bz2
 *.tar.xz
 *.tar.zst
-```

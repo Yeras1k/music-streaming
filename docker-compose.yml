@@ -12,7 +12,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U music_user"]
+      test: ["CMD-SHELL", "pg_isready -U music_user -d music_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -54,6 +54,7 @@ services:
       dockerfile: user-service/Dockerfile
     ports:
       - "50051:50051"
+      - "9091:9090"  # Metrics port
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -81,6 +82,7 @@ services:
       dockerfile: music-service/Dockerfile
     ports:
       - "50052:50052"
+      - "9092:9090"  # Changed to 9092
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -110,6 +112,7 @@ services:
       dockerfile: payment-service/Dockerfile
     ports:
       - "50053:50053"
+      - "9093:9090"  # Changed to 9093
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -177,7 +180,7 @@ services:
   frontend:
     image: nginx:alpine
     ports:
-      - "3000:80"
+      - "7275:80"
     volumes:
       - ./frontend:/usr/share/nginx/html:ro
     networks:
@@ -202,7 +205,7 @@ services:
   grafana:
     image: grafana/grafana:10.0.0
     ports:
-      - "3001:3000"
+      - "8081:3000"
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_INSTALL_PLUGINS: grafana-piechart-panel

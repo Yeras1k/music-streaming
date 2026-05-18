@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,6 +14,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
@@ -331,6 +333,14 @@ func main() {
 	dbName := getEnv("DB_NAME", "music_db")
 	redisAddr := getEnv("REDIS_ADDR", "redis:6379")
 	natsURL := getEnv("NATS_URL", "nats://nats:4222")
+
+	go func() {
+		http.Handle("/metrics", promhttp.Handler())
+		log.Println("Metrics server listening on :9090")
+		if err := http.ListenAndServe(":9090", nil); err != nil {
+			log.Printf("Metrics server error: %v", err)
+		}
+	}()
 
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=UTC",
 		dbHost, dbUser, dbPass, dbName, dbPort)

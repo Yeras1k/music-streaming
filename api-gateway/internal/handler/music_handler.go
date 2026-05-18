@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"strconv"
@@ -259,4 +260,45 @@ func (h *MusicHandler) GetRecommendations(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, resp)
+}
+
+func (h *MusicHandler) StreamTrack(c *gin.Context) {
+
+	id := c.Param("id")
+
+	req := &pb.StreamTrackRequest{
+		TrackId: id,
+	}
+
+	stream, err := h.musicClient.StreamTrack(
+		context.Background(),
+		req,
+	)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.Header("Content-Type", "audio/mpeg")
+	c.Header("Accept-Ranges", "bytes")
+
+	for {
+
+		chunk, err := stream.Recv()
+
+		if err != nil {
+			break
+		}
+
+		_, writeErr := c.Writer.Write(chunk.Data)
+
+		if writeErr != nil {
+			return
+		}
+
+		c.Writer.Flush()
+	}
 }
